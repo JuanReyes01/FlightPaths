@@ -1,6 +1,17 @@
 <script lang="ts">
-	import LeafletMap from '$lib/components/Map.svelte';
+	import Map from '$lib/components/Map.svelte';
 </script>
 
-<!-- Use the Leaflet Map component -->
-<LeafletMap center={[4.624335, -74.063644]} zoom={10} />
+<div class="page-container">
+	<Map />
+</div>
+
+<style>
+	.page-container {
+		width: 100vw;
+		height: 100vh;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+	}
+</style>
