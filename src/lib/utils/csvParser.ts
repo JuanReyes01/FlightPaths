@@ -1,43 +1,31 @@
-import Papa from 'papaparse';
-import proj4 from 'proj4';
+import { toLatLon } from 'utm';
 
-const utm18N = '+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs';
-const wgs84 = '+proj=longlat +datum=WGS84 +no_defs';
-
-/**
- * Converts UTM (X, Y) to Latitude/Longitude
- */
-export function utmToLatLng(utmX: number, utmY: number): { lat: number; lng: number } {
-	const [lng, lat] = proj4(utm18N, wgs84, [utmX, utmY]);
-	return { lat, lng };
-}
-
-/**
- * Parses a CSV file and converts UTM to Lat/Lng.
- */
-export async function parseCSV(filePath: string) {
-	const response = await fetch(filePath);
+export async function parseCSV(url: string) {
+	const response = await fetch(url);
 	const text = await response.text();
 
-	return new Promise<{ lat: number; lng: number; tagId: string; name: string; time: string }[]>(
-		(resolve) => {
-			Papa.parse(text, {
-				header: true,
-				skipEmptyLines: true,
-				complete: (results) => {
-					const data = results.data.map((row: any) => {
-						const { lat, lng } = utmToLatLng(parseFloat(row.UTMx), parseFloat(row.UTMy));
-						return {
-							tagId: row.TagId,
-							name: row.Name,
-							time: row.DateTime, // Keep as string
-							lat,
-							lng
-						};
-					});
-					resolve(data);
-				}
-			});
-		}
-	);
+	console.log('📂 Raw CSV Content:', text);
+
+	const rows = text.trim().split('\n').slice(1); // Skip headers
+	const data = rows
+		.map((row, index) => {
+			const cols = row.split(',').map((col) => col.trim());
+			if (cols.length < 5) {
+				console.warn(`⚠️ Skipping invalid row at index ${index + 1}:`, row);
+				return null;
+			}
+
+			const [_, TagId, Name, DateTime, UTMx, UTMy] = cols;
+
+			// Convert UTM to Lat/Lng (UTM Zone 18N)
+			const { latitude, longitude } = toLatLon(parseFloat(UTMx), parseFloat(UTMy), 18, 'N');
+
+			//console.log(`🌍 Converted UTM → LatLng: ${latitude}, ${longitude}`);
+
+			return { TagId, Name, DateTime, lat: latitude, lng: longitude };
+		})
+		.filter(Boolean); // Remove null values
+
+	console.log('✅ Parsed Data with Lat/Lng:', data);
+	return data;
 }

@@ -2,7 +2,9 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { parseCSV } from '$lib/utils/csvParser';
-	import type { Map, Marker, CircleMarker, Polyline } from 'leaflet';
+	import Sidebar from '$lib/components/Sidebar.svelte';
+	import type { Map, CircleMarker, Polyline } from 'leaflet';
+	import { individuals, setIndividuals } from '$lib/stores/IndividualStore';
 
 	let map: Map | null = null;
 	let markers: { marker: CircleMarker; time: Date }[] = [];
@@ -26,108 +28,164 @@
 			attribution: '&copy; OpenStreetMap contributors'
 		}).addTo(map);
 
-		console.log('✅ Map Loaded');
+		console.log('✅ Map initialized');
 
-		// Load CSV Data AFTER Map is Initialized
 		const points = await parseCSV('/data/allBirds_Winter2023_Radio-tracking_A-nigricollis.csv');
+		setIndividuals(points); // ✅ Ensure individuals are set
+
+		if (!points || points.length === 0) {
+			console.warn('⚠️ No points found in parsed CSV');
+			return;
+		}
+
 		console.log('📌 Loaded Points:', points);
 
-		// Sort timestamps and store unique values
-		timestamps = [...new Set(points.map((p) => new Date(p.time)))].sort(
-			(a, b) => a.getTime() - b.getTime()
-		);
+		timestamps = [
+			...new Set(
+				points
+					.map((p) => {
+						const parts = p.DateTime.match(/(\d+)\/(\d+)\/(\d+) (\d+):(\d+)/);
+						if (!parts) {
+							console.warn(`🚨 Invalid DateTime format: ${p.DateTime}`);
+							return null;
+						}
 
-		// Create circle markers
-		points.forEach(({ lat, lng, name, time }, index) => {
+						const [, month, day, year, hours, minutes] = parts.map(Number);
+						const parsedDate = new Date(year, month - 1, day, hours, minutes);
+
+						//console.log(`🕒 Fixed DateTime: ${p.DateTime} → ${parsedDate}`);
+						return isNaN(parsedDate.getTime()) ? null : parsedDate;
+					})
+					.filter(Boolean)
+			)
+		].sort((a, b) => a.getTime() - b.getTime());
+
+		//console.log('📆 Corrected timestamps:', timestamps);
+
+		//console.log('📆 Extracted timestamps:', timestamps);
+
+		points.forEach(({ lat, lng, TagId, DateTime }) => {
+			if (isNaN(lat) || isNaN(lng)) {
+				console.warn(`🚨 Invalid coordinates for ${TagId}: lat=${lat}, lng=${lng}`);
+				return;
+			}
+
+			//console.log(`📍 Adding Marker: ${TagId} at [${lat}, ${lng}]`);
+
 			const marker = L.circleMarker([lat, lng], {
-				color: index % 2 === 0 ? 'red' : 'blue', // Alternate colors
+				color: '#ff0000', // 🔥 Change color for visibility
 				fillColor: 'white',
 				fillOpacity: 1,
-				radius: 6, // Adjust for size
+				radius: 6,
 				weight: 2
-			}).bindPopup(`${name} <br> ${time}`);
+			}).bindPopup(`${TagId} <br> ${DateTime}`);
 
-			markers.push({ marker, time: new Date(time) });
+			marker.addTo(map); // 🔥 Ensure it's added immediately
+
+			markers.push({ marker, id: TagId, time: new Date(DateTime) });
 		});
 
-		// Create movement lines
-		for (let i = 1; i < points.length; i++) {
-			const prev = points[i - 1];
-			const curr = points[i];
+		console.log('📍 Markers added:', markers);
 
-			const line = L.polyline(
-				[
-					[prev.lat, prev.lng],
-					[curr.lat, curr.lng]
-				],
-				{
-					color: 'gray',
-					weight: 2,
-					dashArray: '5,5' // Dashed line for movement effect
-				}
-			);
-
-			lines.push(line);
-		}
-
-		// Initially update the markers based on the first time value
-		updateMarkers();
+		updateMarkers(); // Show initial markers
 	});
 
-	// Function to show only markers that match the selected time
 	function updateMarkers() {
 		if (!map) return;
-
 		const currentTime = timestamps[selectedTime];
+
 		console.log(`⏳ Showing markers for time: ${currentTime}`);
 
+		// 🔥 Debug: Ensure selected time has valid markers
+		const filteredMarkers = markers.filter(({ time }) => time.getTime() === currentTime.getTime());
+
+		console.log(`🔍 Found ${filteredMarkers.length} markers for ${currentTime}`);
+
+		// Remove all markers
 		markers.forEach(({ marker }) => map?.removeLayer(marker));
-		lines.forEach((line) => map?.removeLayer(line));
 
-		// Show markers for the selected time
-		markers
-			.filter(({ time }) => time.getTime() === currentTime.getTime())
-			.forEach(({ marker }) => marker.addTo(map));
+		// Add only the ones matching the selected time
+		filteredMarkers.forEach(({ marker }) => {
+			console.log(`✅ Adding marker at: ${marker.getLatLng()}`);
+			marker.addTo(map);
+		});
+	}
+	$: {
+		console.log('🔄 Individuals store updated:', $individuals);
 
-		// Show movement lines if time progresses
-		if (selectedTime > 0) {
-			lines[selectedTime - 1]?.addTo(map);
-		}
+		$individuals.forEach((ind) => {
+			markers
+				.filter(({ id }) => id === ind.id)
+				.forEach(({ marker }) => {
+					console.log(`🎨 Updating marker color for ${ind.id}: ${ind.color}`);
+
+					map?.removeLayer(marker); // ✅ Remove the existing marker
+
+					marker.setStyle({
+						color: ind.color,
+						fillColor: ind.color,
+						fillOpacity: 1
+					});
+
+					marker.addTo(map); // ✅ Re-add the updated marker
+				});
+		});
 	}
 </script>
 
-<div id="map"></div>
+<div class="map-container">
+	<Sidebar />
+	<div id="map"></div>
 
-<!-- Time Slider UI -->
-{#if timestamps.length > 0}
-	<div class="slider-container">
-		<input
-			type="range"
-			min="0"
-			max={timestamps.length - 1}
-			bind:value={selectedTime}
-			on:input={updateMarkers}
-		/>
-		<p>{timestamps[selectedTime].toLocaleString()}</p>
-	</div>
-{/if}
+	<!-- ✅ Time Slider UI -->
+	{#if timestamps.length > 0}
+		{setTimeout(() => console.log('✅ Slider should be visible!'), 500)}
+		<div class="slider-container">
+			<input
+				type="range"
+				min="0"
+				max={timestamps.length - 1}
+				bind:value={selectedTime}
+				on:input={updateMarkers}
+			/>
+			<p>{timestamps[selectedTime].toLocaleString()}</p>
+		</div>
+	{:else}
+		<p class="warning">⚠️ No timestamps available</p>
+	{/if}
+</div>
 
 <style>
-	#map {
-		width: 100%;
-		height: 90vh;
+	.map-container {
+		display: flex;
 		position: relative;
-		z-index: 0;
+		width: 100%;
+		height: 100vh;
 	}
 
+	.sidebar {
+		width: 250px;
+		z-index: 1000; /* Ensure it appears above the map */
+	}
+
+	#map {
+		flex: 1;
+		height: 100%;
+		position: relative;
+		z-index: 1; /* Ensure the map stays behind */
+	}
+
+	/* ✅ Ensure the slider stays visible */
 	.slider-container {
 		position: absolute;
-		bottom: 10px;
+		bottom: 20px;
 		left: 50%;
 		transform: translateX(-50%);
-		background: rgba(255, 255, 255, 0.8);
+		background: rgba(255, 255, 255, 0.9);
 		padding: 10px;
-		border-radius: 5px;
+		border-radius: 10px;
+		box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+		z-index: 1000; /* 🔥 Make sure it’s always on top */
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -135,5 +193,16 @@
 
 	input[type='range'] {
 		width: 300px;
+	}
+
+	/* ✅ Debug: Add a border to check if it's appearing */
+	.slider-container {
+		border: 2px solid red; /* 🔥 Remove this later */
+	}
+	#map {
+		flex: 1; /* Take remaining space */
+		height: 100vh;
+		position: relative;
+		z-index: 1;
 	}
 </style>
