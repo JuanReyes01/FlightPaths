@@ -24,6 +24,7 @@ export interface MarkerData {
 export class MarkerManager {
 	private readonly map: Map;
 	private readonly markers: { marker: CircleMarker; id: string; time: Date }[] = [];
+	private readonly markerColors: Map<string, string> = new Map(); // Store marker colors
 
 	constructor(map: Map) {
 		this.map = map;
@@ -32,7 +33,7 @@ export class MarkerManager {
 	async addMarkers(points: MarkerData[]) {
 		//console.log('addMarkers function called with points:', points);
 
-		// ✅ Ensure Leaflet is loaded before proceeding
+		// Ensure Leaflet is loaded before proceeding
 		const L = await loadLeaflet();
 		if (!L) {
 			console.warn('⚠️ Leaflet not loaded, cannot add markers!');
@@ -40,7 +41,7 @@ export class MarkerManager {
 		}
 
 		points.forEach(({ id, lat, lng, time, color = '#ff0000' }) => {
-			// ✅ Validate data before adding the marker
+			// Validate data before adding the marker
 			if (!id || isNaN(lat) || isNaN(lng)) {
 				console.error(`❌ Skipping invalid marker data:`, { id, lat, lng });
 				return;
@@ -54,6 +55,7 @@ export class MarkerManager {
 				weight: 2
 			}).bindPopup(`${id} <br> ${time}`);
 			this.markers.push({ marker, id, time });
+			this.markerColors.set(id, color); // Store the initial color
 		});
 		this.syncStore();
 	}
@@ -72,7 +74,9 @@ export class MarkerManager {
 			({ time, id }) => time.getTime() === selectedTime.getTime() && activeIDs.has(id)
 		);
 
-		filteredMarkers.forEach(({ marker }) => {
+		filteredMarkers.forEach(({ marker, id }) => {
+			const color = this.markerColors.get(id) || '#ff0000'; // Get the stored color
+			marker.setStyle({ color, fillColor: color });
 			marker.addTo(this.map);
 		});
 
@@ -87,7 +91,9 @@ export class MarkerManager {
 		const marker = this.markers.find((m) => m.id === id);
 		if (marker) {
 			marker.marker.setStyle({ color, fillColor: color });
+			this.markerColors.set(id, color); // Update the stored color
 		}
+		this.syncStore();
 	}
 
 	clearMarkers() {
