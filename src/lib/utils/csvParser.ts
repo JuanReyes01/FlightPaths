@@ -1,43 +1,61 @@
-import Papa from 'papaparse';
-import proj4 from 'proj4';
+import { toLatLon } from 'utm';
 
-const utm18N = '+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs';
-const wgs84 = '+proj=longlat +datum=WGS84 +no_defs';
-
-/**
- * Converts UTM (X, Y) to Latitude/Longitude
+/*
+ * Parse CSV data from a URL and convert UTM coordinates to Lat/Lng
  */
-export function utmToLatLng(utmX: number, utmY: number): { lat: number; lng: number } {
-	const [lng, lat] = proj4(utm18N, wgs84, [utmX, utmY]);
-	return { lat, lng };
-}
 
-/**
- * Parses a CSV file and converts UTM to Lat/Lng.
- */
-export async function parseCSV(filePath: string) {
-	const response = await fetch(filePath);
+export async function parseCSV(
+	url: string
+): Promise<{ TagId: string; Name: string; DateTime: Date; lat: number; lng: number }[]> {
+	// Fetch CSV file
+	const response = await fetch(url);
+
+	// Get raw CSV content
 	const text = await response.text();
 
-	return new Promise<{ lat: number; lng: number; tagId: string; name: string; time: string }[]>(
-		(resolve) => {
-			Papa.parse(text, {
-				header: true,
-				skipEmptyLines: true,
-				complete: (results) => {
-					const data = results.data.map((row: any) => {
-						const { lat, lng } = utmToLatLng(parseFloat(row.UTMx), parseFloat(row.UTMy));
-						return {
-							tagId: row.TagId,
-							name: row.Name,
-							time: row.DateTime, // Keep as string
-							lat,
-							lng
-						};
-					});
-					resolve(data);
-				}
-			});
-		}
-	);
+	//console.log('📂 Raw CSV Content:', text);
+
+	const rows = text.trim().split('\n').slice(1); // Skip headers
+
+	const data = rows
+		.map((row, index) => {
+			const cols = row.split(',').map((col) => col.trim());
+			//Check if all rows are correct
+			if (cols.length < 5) {
+				console.warn(`⚠️ Skipping invalid row at index ${index + 1}:`, row);
+				return null;
+			}
+
+			// Destructure columns
+			const [_, TagId, Name, DateTime, UTMx, UTMy] = cols;
+
+			// Convert UTM to Lat/Lng (UTM Zone 18N)
+			const { latitude, longitude } = toLatLon(parseFloat(UTMx), parseFloat(UTMy), 18, 'N');
+
+			//console.log(`🌍 Converted UTM → LatLng: ${latitude}, ${longitude}`);
+
+			// Convert DateTime to Date object
+			const parts = DateTime.match(/(\d+)\/(\d+)\/(\d+) (\d+):(\d+)/);
+			if (!parts) {
+				console.warn(`🚨 Invalid DateTime format: ${DateTime}`);
+				return null;
+			}
+
+			const [, month, day, year, hours, minutes] = parts.map(Number);
+			const parsedDate = new Date(year, month - 1, day, hours, minutes);
+
+			if (isNaN(parsedDate.getTime())) {
+				console.warn(`🚨 Invalid Date: ${DateTime}`);
+				return null;
+			}
+
+			return { TagId, Name, DateTime: parsedDate, lat: latitude, lng: longitude };
+		})
+		.filter(
+			(point): point is { TagId: string; Name: string; DateTime: Date; lat: number; lng: number } =>
+				point !== null
+		); // Type Predicate
+
+	console.log('✅ Parsed Data with Lat/Lng:', data);
+	return data;
 }
