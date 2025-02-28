@@ -21,26 +21,31 @@
 		await tick();
 
 		leafletMap = L.map(container).setView([4.381917405828121, -74.35136899999998], 13);
-		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-			attribution: '&copy; OpenStreetMap contributors'
-		}).addTo(leafletMap);
+
+		L.tileLayer(
+			'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+			{
+				attribution:
+					'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+			}
+		).addTo(leafletMap);
 
 		// Ensure the map is fully rendered before resizing
 		requestAnimationFrame(() => {
 			leafletMap?.invalidateSize();
-			console.log('🔄 Leaflet map size invalidated');
+			//console.log('🔄 Leaflet map size invalidated');
 		});
 
 		// Handle window resizing
 		resizeHandler = () => {
 			leafletMap?.invalidateSize();
-			console.log('🔄 Window resized, Leaflet map updated');
+			//console.log('🔄 Window resized, Leaflet map updated');
 		};
 		window.addEventListener('resize', resizeHandler);
 
 		// Store map in Svelte store
 		map.set(leafletMap);
-		console.log('✅ Leaflet map initialized and set in store:', leafletMap);
+		//console.log('✅ Leaflet map initialized and set in store:', leafletMap);
 	});
 
 	// Ensure cleanup when component is destroyed
@@ -50,7 +55,7 @@
 		}
 		if (leafletMap) {
 			leafletMap.remove();
-			console.log('🗑️ Leaflet map removed');
+			//console.log('🗑️ Leaflet map removed');
 		}
 	});
 </script>

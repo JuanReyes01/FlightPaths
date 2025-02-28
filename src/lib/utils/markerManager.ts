@@ -48,7 +48,7 @@ export class MarkerManager {
 
 			const marker = L.circleMarker([lat, lng], {
 				color,
-				fillColor: 'white',
+				fillColor: color,
 				fillOpacity: 1,
 				radius: 6,
 				weight: 2
@@ -86,7 +86,7 @@ export class MarkerManager {
 	updateMarkerColor(id: string, color: string) {
 		const marker = this.markers.find((m) => m.id === id);
 		if (marker) {
-			marker.marker.setStyle({ color });
+			marker.marker.setStyle({ color, fillColor: color });
 		}
 	}
 
