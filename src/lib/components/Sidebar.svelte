@@ -4,7 +4,7 @@
 	function changeColor(id: string, event: Event) {
 		let color = (event.target as HTMLInputElement).value;
 
-		// ✅ Ensure color is a valid 6-character hex code
+		// Ensure color is a valid 6-character hex code
 		if (!/^#[0-9A-F]{6}$/i.test(color)) {
 			console.warn(`🚨 Invalid color detected: ${color}`);
 			return;
@@ -27,7 +27,7 @@
 					on:input={(e) => changeColor(individual.id, e)}
 				/>
 				<button on:click={() => updateIndividual(individual.id, { visible: !individual.visible })}>
-					{individual.visible ? '👁️ Show' : '🚫 Hide'}
+					{individual.visible ? 'Show' : 'Hide'}
 				</button>
 			</li>
 		{/each}
@@ -46,11 +46,5 @@
 		padding: 1rem;
 		overflow-y: auto;
 		z-index: 1000; /* ✅ Ensure it's above the map */
-	}
-	.individual {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 8px;
 	}
 </style>

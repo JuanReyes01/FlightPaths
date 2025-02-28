@@ -1,1 +1,10 @@
 @import 'tailwindcss';
+.map-container,
+.map-container * {
+	box-sizing: border-box;
+}
+.map-container {
+	position: relative; /* instead of absolute if applicable */
+	height: 100vh !important;
+	width: 100% !important;
+}
